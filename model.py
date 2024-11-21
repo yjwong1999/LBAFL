@@ -8,7 +8,16 @@ import copy
 #------------------------------------------------------------------------------
 # Define the MobileNetV2 model
 #------------------------------------------------------------------------------
-def create_mobilenetv2(num_class, num_channel, device):
+def create_mobilenetv2(data, device):
+    # parameters
+    if data = 'MNIST':
+        num_class = 10
+        num_channel = 1
+    elif data = 'CIFAR10':
+        num_class = 10  
+        num_channel = 3
+
+    # init a pretrained mobilenetv2
     model = models.mobilenet_v2(pretrained=True)
     
     # Modify the first convolutional layer to accept 1 input channel (for grayscale images)
