@@ -1,13 +1,12 @@
 import torch
-from torch import nn, optim
-from torchvision import datasets, transforms, models
+from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 import numpy as np
-import random
-import copy
 
 
+#------------------------------------------------------------------------------
 # Custom function to create non-IID dataset split
+#------------------------------------------------------------------------------
 def create_noniid_datasets(dataset, num_clients, majority_ratio=0.8, verbose=False):
     # dataset
     targets = np.array(dataset.targets)
@@ -83,3 +82,37 @@ def create_noniid_datasets(dataset, num_clients, majority_ratio=0.8, verbose=Fal
 
 
     return client_datasets      
+
+
+#------------------------------------------------------------------------------
+# get dataset
+#------------------------------------------------------------------------------
+def get_dataset(data, num_clients):
+    # assertion
+    assert data in ['MNIST', 'CIFAR10'], "dataset must be one of ['mnist', 'CIFAR10']"
+    
+    if data == 'MNIST':
+        # Dataset preparation
+        transform = transforms.Compose([transforms.Resize((64, 64)), transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+        train_data = datasets.MNIST(root="./data", train=True, download=True, transform=transform)
+        client_datasets = create_noniid_datasets(train_data, num_clients)
+        
+        # Test dataset preparation
+        test_data = datasets.MNIST(root="./data", train=False, download=True, transform=transform)
+        test_loader = DataLoader(test_data, batch_size=32, shuffle=False)
+        
+    elif data == 'CIFAR10':
+        # Dataset preparation
+        transform = transforms.Compose([transforms.Resize((64, 64)), transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+        train_data = datasets.CIFAR10(root="./data", train=True, download=True, transform=transform)
+        client_datasets = create_noniid_datasets(train_data, num_clients)
+        
+        # Test dataset preparation
+        test_data = datasets.CIFAR10(root="./data", train=False, download=True, transform=transform)
+        test_loader = DataLoader(test_data, batch_size=32, shuffle=False)        
+    
+    return client_datasets, test_loader
+    
+    
+    
+    
