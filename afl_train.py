@@ -18,7 +18,7 @@ NUM_CLIENTS = 100
 CLIENTS_PER_ROUND = 10
 ROUNDS = 15 * CLIENTS_PER_ROUND
 GLOBAL_MODEL = None
-DATA = 'MNIST'
+DATA = 'CIFAR10'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Set seed for random, NumPy, and PyTorch
@@ -129,7 +129,7 @@ def main():
 
     # Final evaluation after all rounds
     print("Federated learning completed!")
-    evaluate_global_model(GLOBAL_MODEL, test_loader)
+    evaluate_global_model(GLOBAL_MODEL, test_loader, DEVICE)
 
 if __name__ == "__main__":
     main()
