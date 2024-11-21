@@ -10,10 +10,10 @@ import copy
 #------------------------------------------------------------------------------
 def create_mobilenetv2(data, device):
     # parameters
-    if data = 'MNIST':
+    if data == 'MNIST':
         num_class = 10
         num_channel = 1
-    elif data = 'CIFAR10':
+    elif data == 'CIFAR10':
         num_class = 10  
         num_channel = 3
 
@@ -22,7 +22,7 @@ def create_mobilenetv2(data, device):
     
     # Modify the first convolutional layer to accept 1 input channel (for grayscale images)
     if num_channel == 1:
-        model.features[0][0] = nn.Conv2d(3, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        model.features[0][0] = nn.Conv2d(1, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
     
     # Modify the classifier to have N output units (for N classes)
     model.classifier[1] = nn.Linear(model.last_channel, num_class)
@@ -85,7 +85,7 @@ def client_train(client_id, model, data, device, compute_latency, upload_latency
 #------------------------------------------------------------------------------    
 def aggregate_models(global_model, client_updates, staleness=None):
     # synchronous FL
-    if staleness is not None:
+    if staleness is None:
         # get all key/value (layer name, weights) of global model
         global_state = global_model.state_dict()
         
