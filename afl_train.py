@@ -43,6 +43,7 @@ client_datasets, test_loader = get_dataset(data=DATA, num_clients=NUM_CLIENTS)
 #------------------------------------------------------------------------------
 # Main function
 #------------------------------------------------------------------------------
+# Main function
 def main():
     # instantiate the global model
     global GLOBAL_MODEL
