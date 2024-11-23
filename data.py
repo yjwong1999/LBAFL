@@ -93,7 +93,7 @@ def get_dataset(data, num_clients):
     
     if data == 'MNIST':
         # Dataset preparation
-        transform = transforms.Compose([transforms.Resize((64, 64)), transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+        transform = transforms.Compose([transforms.Resize((128, 128)), transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
         train_data = datasets.MNIST(root="./data", train=True, download=True, transform=transform)
         client_datasets = create_noniid_datasets(train_data, num_clients)
         
