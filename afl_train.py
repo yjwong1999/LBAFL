@@ -18,7 +18,7 @@ NUM_CLIENTS = 100
 CLIENTS_PER_ROUND = 10
 ROUNDS = 15 * CLIENTS_PER_ROUND
 GLOBAL_MODEL = None
-DATA = 'CIFAR10'
+DATA = 'MNIST'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Set seed for random, NumPy, and PyTorch
