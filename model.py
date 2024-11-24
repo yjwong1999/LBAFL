@@ -135,3 +135,5 @@ def evaluate_global_model(model, test_loader, device):
             correct += (predicted == labels).sum().item()
     accuracy = 100 * correct / total
     print(f"Global model accuracy: {accuracy:.2f}%")
+
+    return accuracy
