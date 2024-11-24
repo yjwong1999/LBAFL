@@ -11,7 +11,7 @@ from data import get_dataset
 from model import create_mobilenetv2, client_train, aggregate_models, evaluate_global_model
 
 #------------------------------------------------------------------------------
-#
+# FL variables
 #------------------------------------------------------------------------------
 # Global variables
 NUM_CLIENTS = 100
@@ -33,7 +33,7 @@ torch.cuda.manual_seed_all(seed)  # for multi-GPU setups
 
 
 #------------------------------------------------------------------------------
-#
+# Get dataset
 #------------------------------------------------------------------------------
 # get dataset
 client_datasets, test_loader = get_dataset(data=DATA, num_clients=NUM_CLIENTS)
