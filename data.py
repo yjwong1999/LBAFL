@@ -112,6 +112,60 @@ def get_dataset(data, num_clients):
         test_loader = DataLoader(test_data, batch_size=32, shuffle=False)        
     
     return client_datasets, test_loader
+
+
+#------------------------------------------------------------------------------
+# Top N Improved Classes from Confustion Matrix
+#------------------------------------------------------------------------------
+def top_n_improved_classes(before_confusion_matrix, after_confusion_matrix, N):
+    """
+    Finds the top N classes with the most improved prediction accuracy.
+    Masks classes with negative improvements as -1.
+    
+    Parameters:
+    - before_confusion_matrix: numpy array (square matrix)
+    - after_confusion_matrix: numpy array (square matrix)
+    - N: Number of top classes to return
+    
+    Returns:
+    - List of class indices with the most improvement in descending order.
+      If there are fewer than N improving classes, fills with -1.
+    """
+    # Ensure matrices are numpy arrays
+    before_confusion_matrix = np.array(before_confusion_matrix)
+    after_confusion_matrix = np.array(after_confusion_matrix)
+    
+    # Check if confusion matrices are square and of the same shape
+    if before_confusion_matrix.shape != after_confusion_matrix.shape or \
+       before_confusion_matrix.shape[0] != before_confusion_matrix.shape[1]:
+        raise ValueError("Confusion matrices must be square and of the same shape.")
+    
+    # Calculate per-class accuracies
+    total_samples_per_class = before_confusion_matrix.sum(axis=1)  # Sum of all entries per class
+    before_accuracy = np.diag(before_confusion_matrix) / np.clip(total_samples_per_class, 1, None)
+    after_accuracy = np.diag(after_confusion_matrix) / np.clip(total_samples_per_class, 1, None)
+    
+    # Improvement in accuracy
+    accuracy_improvement = after_accuracy - before_accuracy
+    
+    # Mask negative improvements
+    accuracy_improvement[accuracy_improvement < 0] = -np.inf  # Set negative improvements to -inf for sorting
+    
+    # Sort by improvement in descending order
+    sorted_indices = np.argsort(-accuracy_improvement)  # Descending sort
+    sorted_improvement = accuracy_improvement[sorted_indices]
+    
+    # Filter only positive improvements
+    top_classes = [idx for idx, imp in zip(sorted_indices, sorted_improvement) if imp != -np.inf]
+    
+    # Select top N classes
+    top_classes = top_classes[:N]
+    
+    # If fewer than N classes improve, pad with -1
+    if len(top_classes) < N:
+        top_classes.extend([-1] * (N - len(top_classes)))
+    
+    return top_classes
     
     
     
