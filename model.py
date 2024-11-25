@@ -3,6 +3,7 @@ from torch import nn, optim
 from torchvision import models
 from torch.utils.data import DataLoader
 import copy
+from sklearn.metrics import confusion_matrix
 
 
 #------------------------------------------------------------------------------
@@ -122,18 +123,36 @@ def aggregate_models(global_model, client_updates, staleness=None):
 #------------------------------------------------------------------------------
 # Evaluation global model
 #------------------------------------------------------------------------------
-def evaluate_global_model(model, test_loader, device):
+def evaluate_global_model(model, test_loader, device, cm=False):
     model.eval()
+    all_labels = []
+    all_predictions = []
     correct = 0
     total = 0
+
     with torch.no_grad():
         for inputs, labels in test_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
             _, predicted = torch.max(outputs, 1)
+
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
+
+            # Store all labels and predictions for confusion matrix calculation
+            all_labels.extend(labels.cpu().numpy())
+            all_predictions.extend(predicted.cpu().numpy())
+
+    # Calculate accuracy
     accuracy = 100 * correct / total
     print(f"Global model accuracy: {accuracy:.2f}%")
 
-    return accuracy
+    if not cm:
+        return accuracy
+
+    # Generate confusion matrix
+    conf_matrix = confusion_matrix(all_labels, all_predictions)
+    print("Confusion Matrix:")
+    print(conf_matrix)
+
+    return accuracy, conf_matrix
