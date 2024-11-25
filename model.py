@@ -155,4 +155,4 @@ def evaluate_global_model(model, test_loader, device, cm=False):
     print("Confusion Matrix:")
     print(conf_matrix)
 
-    return accuracy, conf_matrix
+    return accuracy, np.array(conf_matrix)
