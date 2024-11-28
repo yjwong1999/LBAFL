@@ -4,6 +4,7 @@ from torchvision import models
 from torch.utils.data import DataLoader
 import copy
 from sklearn.metrics import confusion_matrix
+import numpy as np
 
 
 #------------------------------------------------------------------------------
