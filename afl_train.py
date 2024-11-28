@@ -82,10 +82,6 @@ def main():
                 client_updates.append((client_id, client_weights, client_time))
                 client_last_round[client_id] = round_num
 
-        #print(active_clients)
-        #print([x[0] for x in client_updates])
-        #print([x[2] for x in client_updates])
-
         # Find the fastest client
         fastest_client = min(client_updates, key=lambda x: x[2])
         fastest_client_id, fastest_client_weights, fastest_client_time = fastest_client
@@ -101,12 +97,17 @@ def main():
         # remove the fastest client from client_updates
         client_updates.remove(fastest_client)
 
-        # Replace the fastest client with a new one from the remaining pool
+        # Select a new client from the remaining clients
         new_client_id = random.choice(list(remaining_clients))
+
+        # remove the new client, and add the fastest client back to remaining_clients
         remaining_clients.remove(new_client_id)
         remaining_clients.add(fastest_client_id)
+
+        # keep track of previous active clients
         prev_active_clients = copy.deepcopy(active_clients)
-        #active_clients = [c if c != fastest_client_id else new_client_id for c in active_clients]
+
+        # replace the fastest client with new client
         active_clients.remove(fastest_client_id)
         active_clients = active_clients + [new_client_id]
 
