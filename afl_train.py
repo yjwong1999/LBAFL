@@ -18,7 +18,7 @@ NUM_CLIENTS = 100
 CLIENTS_PER_ROUND = 10
 ROUNDS = 15 * CLIENTS_PER_ROUND
 GLOBAL_MODEL = None
-DATA = 'MNIST'
+DATA = 'CIFAR10'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Set seed for random, NumPy, and PyTorch
@@ -111,12 +111,15 @@ def main():
         active_clients.remove(fastest_client_id)
         active_clients = active_clients + [new_client_id]
 
-        if staleness > 5:
-            print(f"Client {fastest_client_id} with staleness round {staleness}")
+        # Update global time
+        total_time = fastest_client_time
+
+        if staleness > 99999: # infinite
+            print(f"Skip client {fastest_client_id} with staleness round {staleness}")
+            round_num += 1
             continue
 
-        # Update global time and perform aggregation
-        total_time = fastest_client_time
+        # perform aggregation
         aggregate_models(GLOBAL_MODEL, fastest_client_weights, staleness)
 
         # Output progress
