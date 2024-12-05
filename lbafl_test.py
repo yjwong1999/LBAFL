@@ -7,7 +7,7 @@ import random
 import copy
 import time
 
-from data import get_dataset
+from data import get_dataset, top_n_accuracy_changes
 from model import create_mobilenetv2, client_train, aggregate_models, evaluate_global_model
 
 #------------------------------------------------------------------------------
@@ -33,6 +33,40 @@ torch.cuda.manual_seed_all(seed)  # for multi-GPU setups
 
 
 #------------------------------------------------------------------------------
+# LBAFL variables
+#------------------------------------------------------------------------------
+import sys
+sys.path.append('DDQN')
+from DDQN.ddqn_agent import DDQNAgent
+
+# sample random 5 clients
+sample_dim = 5
+
+# states dimension (client compute latency + upload_latency + top 2 accuracy improvement, staleness, current round, top 2 accuracy decrease)
+states_dim = [int(sample_dim * 4) + 4, ]
+
+# action is to choose from the 5 clients
+action_dim = sample_dim
+
+# init LBAFL agent
+LBAFL = DDQNAgent(gamma=0.99, epsilon=0.9, lr=0.0001,
+                  input_dims=states_dim, n_actions=action_dim,
+                  mem_size=50000, eps_min=0.1,
+                  batch_size=64, replace=25, eps_dec=5e-4,
+                  chkpt_dir=f'LBAFL/', algo='DDQN',
+                  env_name='LBAFL') 
+
+# load weights for inference                    
+if True:
+    LBAFL.load_models()
+    LBAFL.memory.mem_cntr = 0 # not learning
+    LBAFL.epsilon = 0         # not learning
+
+# training hyperparameters
+DRL_ROUND = 10   
+
+
+#------------------------------------------------------------------------------
 # Get dataset
 #------------------------------------------------------------------------------
 # get dataset
@@ -45,10 +79,26 @@ client_datasets, test_loader = get_dataset(data=DATA, num_clients=NUM_CLIENTS)
 #------------------------------------------------------------------------------
 # Main function
 def main():
+
+    #------------------------------------------------------------------------------
+    # For LBAFL
+    #------------------------------------------------------------------------------
+    prev_acc = 0
+    prev_cm = None
+    top_N = 2 # top N accuracy improvement in confusion matrix
+    MDP = None        
+    traces_dict = {i:(0,0) for i in range(NUM_CLIENTS)}
+    data_traces = {i:[-1] * top_N for i in range(NUM_CLIENTS)}    
+    states_traces = {}
+    action_traces = {}
+    
+    #------------------------------------------------------------------------------
+    # For FL system
+    #------------------------------------------------------------------------------
     # instantiate the global model
     global GLOBAL_MODEL
     GLOBAL_MODEL = create_mobilenetv2(data=DATA, device=DEVICE)
-
+    
     # Assign latency characteristics to each client
     compute_latencies = [random.choice([0.25, 0.50, 0.75]) for _ in range(NUM_CLIENTS)]
     upload_latencies = [random.choice([1.0, 1.25, 1.75, 2.0]) for _ in range(NUM_CLIENTS)]
@@ -60,7 +110,10 @@ def main():
     remaining_clients = set(all_clients) - set(active_clients)
 
     client_updates = []
-    client_last_round = {}
+    client_last_round = {}    
+    
+    
+    # start FL
     round_num = 0
     while round_num != ROUNDS:      
 
@@ -96,9 +149,79 @@ def main():
 
         # remove the fastest client from client_updates
         client_updates.remove(fastest_client)
+        
+        # we do not skip for LBAFL
+        # if staleness > 5:
+        #     print(f"Client {fastest_client_id} with staleness round {staleness}")
+        #     continue
 
-        # Select a new client from the remaining clients
-        new_client_id = random.choice(list(remaining_clients))
+        # Update global time and perform aggregation
+        total_time = fastest_client_time
+        aggregate_models(GLOBAL_MODEL, fastest_client_weights, staleness)
+
+        # Output progress
+        print(f"Round {round_num + 1}/{ROUNDS} completed. Total time elapsed: {total_time / 3600:.2f} hours.")   
+
+        # Evaluate global model every round
+        acc, cm = evaluate_global_model(GLOBAL_MODEL, test_loader, DEVICE, cm=True)     
+        
+        # find out top N accuracy changes
+        if round_num == 0:
+            # there are no prev_cm, fill with -1 first
+            top_improvements = [-1] * top_N
+            top_deteriorations = [-1] * top_N
+        else:
+            # find the top n accuracy changes                
+            top_improvements, top_deteriorations = top_n_accuracy_changes(prev_cm, cm, N=top_N)   
+            
+        # overwrite prev_cm
+        prev_cm = cm                
+            
+        '''
+        Note that:
+            top_improvements is used to describe the contribution made by client
+            top_deteriorations is used to describe what the global model needs to improve            
+        '''
+        data_traces[fastest_client_id] = top_improvements
+
+        
+        #------------------------------------------------------------------------------
+        # get LBAFL states for client selection
+        #------------------------------------------------------------------------------
+        # randomly select N = sample_dim clients
+        sampled_ids = random.sample(list(remaining_clients), sample_dim)
+
+        # init states        
+        states = [round_num, staleness] + top_deteriorations
+        for client_id in sampled_ids:                
+            # We cannot directly use these values, cuz LBAFL might be first time sampling these clients
+            '''
+            compute_latency = compute_latencies[client_id]
+            upload_latency = upload_latencies[client_id]  
+            '''
+            
+            # get history of traces
+            compute_latency, upload_latency = traces_dict[client_id]
+            
+            # record new trace
+            traces_dict[client_id] = (compute_latencies[client_id], upload_latencies[client_id])                
+                                
+            # the partial observations
+            partial_obs = [compute_latency, upload_latency] + data_traces[client_id]
+            
+            # add to states
+            states += partial_obs                         
+            
+        
+        #------------------------------------------------------------------------------
+        # get LBAFL action (which is client selection)
+        #------------------------------------------------------------------------------
+        action = LBAFL.choose_action(states)    
+        new_client_id = sampled_ids[action]      
+        print('states: ', states)          
+        print('action: ', action)
+        print('epsilon: ', LBAFL.epsilon)
+        
 
         # remove the new client, and add the fastest client back to remaining_clients
         remaining_clients.remove(new_client_id)
@@ -109,32 +232,50 @@ def main():
 
         # replace the fastest client with new client
         active_clients.remove(fastest_client_id)
-        active_clients = active_clients + [new_client_id]
+        active_clients = active_clients + [new_client_id]    
+        
+        
+        # #------------------------------------------------------------------------------
+        # # get LBAFL reward (to evaluate client selection)
+        # #------------------------------------------------------------------------------
+        # # Find the delta_acc            
+        # delta_acc = 1.732 * (acc - prev_acc)
+        
+        # # this is previous reward, because this client is not an action of current state
+        # prev_reward = delta_acc
+        
+        # # overwrite previous accuracy
+        # prev_acc = acc            
+        
+        
+        # #------------------------------------------------------------------------------
+        # # get LBAFL MDP
+        # #------------------------------------------------------------------------------
+        # try:
+        #     # get the prev_states and prev_action that we used to select this client back to few rounds ago
+        #     prev_states = states_traces[fastest_client_id]
+        #     prev_action = action_traces[fastest_client_id]
+            
+        #     # consturct MDP                
+        #     MDP = [prev_states, prev_action, prev_reward, states]    
 
-        # Update global time
-        total_time = fastest_client_time
-
-        if staleness > 99999: # infinite
-            print(f"Skip client {fastest_client_id} with staleness round {staleness}")
-            round_num += 1
-            continue
-
-        # perform aggregation
-        aggregate_models(GLOBAL_MODEL, fastest_client_weights, staleness)
-
-        # Output progress
-        print(f"Round {round_num + 1}/{ROUNDS} completed. Total time elapsed: {total_time / 3600:.2f} hours.")
-
-
-        # Evaluate global model every 10 rounds
-        if (round_num + 1) % 10 == 0:
-            evaluate_global_model(GLOBAL_MODEL, test_loader, DEVICE)
-
+        #     # overwrite the states and action traces
+        #     states_traces[fastest_client_id] = states
+        #     action_traces[fastest_client_id] = action      
+        # except:
+        #     # there are not previous states and action, so we just record current states and action for this client selection
+        #     states_traces[fastest_client_id] = states
+        #     action_traces[fastest_client_id] = action                           
+            
+        
+        # increment round_num
         round_num += 1
 
     # Final evaluation after all rounds
     print("Federated learning completed!")
-    evaluate_global_model(GLOBAL_MODEL, test_loader, DEVICE)
+    acc, cm = evaluate_global_model(GLOBAL_MODEL, test_loader, DEVICE, cm=True)                  
+        
+        
 
 if __name__ == "__main__":
     main()
